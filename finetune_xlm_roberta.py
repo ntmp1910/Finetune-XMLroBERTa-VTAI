@@ -101,7 +101,11 @@ class VietnameseTextClassifier:
             self.tokenizer.pad_token = self.tokenizer.eos_token
         num_labels = len(self.label2id)
         self.model = AutoModelForSequenceClassification.from_pretrained(
-            self.model_name, num_labels=num_labels, id2label=self.id2label, label2id=self.label2id
+            self.model_name, 
+            num_labels=num_labels, 
+            id2label=self.id2label, 
+            label2id=self.label2id,
+            ignore_mismatched_sizes=True  # Thêm tham số này để xử lý khi số labels khác nhau
         )
         print(f"Model đã được khởi tạo với {num_labels} labels")
 
