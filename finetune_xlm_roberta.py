@@ -219,7 +219,22 @@ def main():
     parser.add_argument("--train_bs", type=int, default=8, help="Batch size train mỗi GPU")
     parser.add_argument("--eval_bs", type=int, default=8, help="Batch size eval mỗi GPU")
     parser.add_argument("--lr", type=float, default=2e-5, help="Learning rate")
+    parser.add_argument("--cuda_visible_devices", type=str, default=None, help="Chỉ định GPU, ví dụ: '0' hoặc '1' hoặc '0,1'")
     args = parser.parse_args()
+
+    # (Optional) Chỉ định GPU qua tham số CLI thay vì export biến môi trường bên ngoài
+    if args.cuda_visible_devices:
+        os.environ["CUDA_VISIBLE_DEVICES"] = args.cuda_visible_devices
+        print(f"[Info] CUDA_VISIBLE_DEVICES set to: {os.environ['CUDA_VISIBLE_DEVICES']}")
+    # In thông tin GPU hiện có
+    try:
+        print(f"[Info] CUDA available: {torch.cuda.is_available()}")
+        if torch.cuda.is_available():
+            print(f"[Info] Num GPUs visible: {torch.cuda.device_count()}")
+            for i in range(torch.cuda.device_count()):
+                print(f"  - GPU {i}: {torch.cuda.get_device_name(i)}")
+    except Exception:
+        pass
 
     # 1) Load data để xác định label mapping trước
     classifier = VietnameseTextClassifier(
