@@ -1,214 +1,195 @@
-# Fine-tune XLM-RoBERTa cho Phân loại Văn bản Tiếng Việt
+# Fine-tune XLM-RoBERTa cho Vietnamese Text Classification
 
-Dự án này fine-tune model XLM-RoBERTa để phân loại văn bản tiếng Việt sử dụng dữ liệu từ file JSON.
+Project này fine-tune model XLM-RoBERTa để phân loại văn bản tiếng Việt với accuracy đạt được 62.72%.
 
-## 📁 Cấu trúc Dự án
+## 🚀 Tính năng
+
+- Fine-tune XLM-RoBERTa cho Vietnamese text classification
+- Hỗ trợ format dữ liệu JSON/JSONL
+- Tự động xử lý GPU/CPU
+- Predict với confidence scores
+- Tích hợp wandb logging (offline mode)
+
+## 📁 Cấu trúc Project
 
 ```
 FineTune xlmr-roBerta/
-├── data_demo.json          # Dữ liệu JSON mẫu 1
-├── data_demo2.json         # Dữ liệu JSON mẫu 2  
-├── finetune_xlm_roberta.py # Script chính để fine-tune
-├── quick_test.py           # Script test nhanh
-├── requirements.txt         # Dependencies
-├── analyze_data.py         # Script phân tích dữ liệu
-└── README.md              # Hướng dẫn này
-```
-
-## 🚀 Cài đặt
-
-1. **Cài đặt dependencies:**
-```bash
-pip install -r requirements.txt
-```
-
-2. **Kiểm tra môi trường:**
-```bash
-python quick_test.py
+├── finetune_xlm_roberta.py      # Script chính để fine-tune
+├── predict.py                   # Script để predict với model đã train
+├── test_texts.txt              # File test texts để predict
+├── run_finetune_fixed.sh       # Script chạy fine-tune với env vars
+├── run_finetune_docker.sh      # Script chạy fine-tune với Docker
+├── run_finetune_sudo.sh        # Script chạy fine-tune với sudo
+├── data/
+│   └── dantri.jsonl            # Dữ liệu training (JSONL format)
+├── model_output/               # Thư mục lưu model đã train
+├── requirements.txt            # Dependencies
+└── README.md                   # File này
 ```
 
 ## 📊 Cấu trúc Dữ liệu
 
-Dữ liệu JSON cần có cấu trúc như sau:
-
+### JSON/JSONL Format
 ```json
-[
-  {
-    "title": "Tiêu đề bài báo",
-    "category": "Thể thao",
-    "summary": "Tóm tắt nội dung bài báo",
-    "datetime": "24/07/2025 12:30 GMT+7"
-  }
-]
+{
+  "title": "Tiêu đề bài viết",
+  "summary": "Tóm tắt nội dung",
+  "category": "Tên category"
+}
 ```
 
-### ️✅ Hỗ trợ JSONL (jsonlines/NDJSON)
-
-Bạn cũng có thể dùng file `.jsonl` (mỗi dòng là một object JSON). Code đã tự động nhận diện và load theo từng dòng:
-
-Ví dụ `data.jsonl`:
-
-```
-{"title": "Tiêu đề 1", "category": "Thể thao", "summary": "Nội dung bài 1"}
-{"title": "Tiêu đề 2", "category": "Pháp luật", "summary": "Nội dung bài 2"}
+### Ví dụ JSONL:
+```jsonl
+{"title": "Bão số 3 đổ bộ", "summary": "Thiệt hại nặng nề", "category": "Thời tiết"}
+{"title": "Giá vàng tăng", "summary": "Thị trường sôi động", "category": "Kinh tế"}
 ```
 
-- Trường bắt buộc: `title`, `category`, `summary`
-- Trường khác (như `datetime`) là tùy chọn
-- Chạy fine-tune với JSONL chỉ cần trỏ `--data` tới file `.jsonl`:
+## 🛠️ Cài đặt
 
+### 1. Cài đặt dependencies
 ```bash
-docker run --gpus all --rm -it \
-  -e CUDA_VISIBLE_DEVICES="1" \
-  -v $PWD:/work -w /work \
-  pytorch/pytorch:2.1.0-cuda12.1-cudnn8-runtime \
-  bash -lc "pip install -r requirements.txt && \
-            python finetune_xlm_roberta.py \
-              --data path/to/your_data.jsonl \
-              --base_model xlm-roberta-base \
-              --output_dir model_output"
+pip install -r requirements.txt
 ```
 
-### Các trường bắt buộc:
-- `title`: Tiêu đề bài báo
-- `category`: Danh mục phân loại
-- `summary`: Tóm tắt nội dung
+### 2. Chuẩn bị dữ liệu
+Đặt file dữ liệu JSON/JSONL vào thư mục `data/`
 
-## 🔧 Sử dụng
+## 🚀 Sử dụng
 
-### 1. Test nhanh
+### 1. Fine-tune Model
+
+#### Chạy trực tiếp:
 ```bash
-python quick_test.py
+python finetune_xlm_roberta.py \
+  --data data/dantri.jsonl \
+  --output_dir model_output \
+  --epochs 3 \
+  --train_bs 8 \
+  --eval_bs 8 \
+  --lr 2e-5
 ```
 
-### 2. Fine-tune model trên GPU server (qua Docker)
-
-- Chạy fine-tune (chọn GPU bằng CUDA_VISIBLE_DEVICES):
-
+#### Chạy với script (khuyến nghị):
 ```bash
-# Ví dụ: dùng GPU số 1, data ở data_demo2.json, lưu ra ./model_output
-docker run --gpus all --rm -it \
-  -e CUDA_VISIBLE_DEVICES="1" \
-  -v $PWD:/work -w /work \
-  pytorch/pytorch:2.1.0-cuda12.1-cudnn8-runtime \
-  bash -lc "pip install -r requirements.txt && \
-            python finetune_xlm_roberta.py \
-              --data data_demo2.json \
-              --base_model xlm-roberta-base \
-              --output_dir model_output \
-              --epochs 3 --train_bs 8 --eval_bs 8 --lr 2e-5"
+chmod +x run_finetune_fixed.sh
+./run_finetune_fixed.sh
 ```
 
-- Resume từ model/ckpt sẵn có (đã có ở thư mục làm việc):
-
+#### Chạy với Docker:
 ```bash
-docker run --gpus all --rm -it \
-  -e CUDA_VISIBLE_DEVICES="1" \
-  -v $PWD:/work -w /work \
-  pytorch/pytorch:2.1.0-cuda12.1-cudnn8-runtime \
-  bash -lc "pip install -r requirements.txt && \
-            python finetune_xlm_roberta.py \
-              --data data_demo2.json \
-              --base_model xlm-roberta-base \
-              --resume_from model_output \
-              --output_dir model_output \
-              --epochs 1 --train_bs 8 --eval_bs 8 --lr 1e-5"
+chmod +x run_finetune_docker.sh
+./run_finetune_docker.sh
 ```
 
-### 3. Sử dụng model đã train
+### 2. Predict với Model đã Train
 
-```python
-from finetune_xlm_roberta import VietnameseTextClassifier
-
-# Load model đã train
-classifier = VietnameseTextClassifier()
-classifier.setup_model()
-
-# Load model đã lưu
-classifier.model = AutoModelForSequenceClassification.from_pretrained("./model_output")
-classifier.tokenizer = AutoTokenizer.from_pretrained("./model_output")
-
-# Dự đoán
-texts = [
-    "Truy nã nghi phạm lừa đảo 5,7 tỉ đồng tiền đặt cọc mua lúa",
-    "Xung đột Thái Lan - Campuchia: Thái Lan ghi nhận ít nhất 12 người thiệt mạng"
-]
-
-predictions = classifier.predict(texts)
-for text, pred in zip(texts, predictions):
-    print(f"Text: {text[:50]}...")
-    print(f"Category: {pred}")
+#### Predict với texts mặc định:
+```bash
+python predict.py --model_path ./model_output
 ```
 
-## ⚙️ Cấu hình
+#### Predict với texts cụ thể:
+```bash
+python predict.py --model_path ./model_output \
+  --texts "Bão số 3 đổ bộ vào miền Trung" "Giá vàng hôm nay tăng mạnh"
+```
 
-### Hyperparameters có thể điều chỉnh:
+#### Predict với file texts:
+```bash
+python predict.py --model_path ./model_output --file test_texts.txt
+```
 
-```python
-# Trong finetune_xlm_roberta.py
-classifier = VietnameseTextClassifier(
-    model_name="xlm-roberta-base",  # Có thể thay bằng "xlm-roberta-large"
-    max_length=256                  # Độ dài tối đa của input
-)
+#### Predict với confidence scores:
+```bash
+python predict.py --model_path ./model_output --file test_texts.txt --with_confidence
+```
 
-# Training arguments
-training_args = TrainingArguments(
-    learning_rate=2e-5,           # Learning rate
-    per_device_train_batch_size=8, # Batch size
-    num_train_epochs=3,           # Số epochs
-    weight_decay=0.01,            # Weight decay
-    warmup_steps=500,             # Warmup steps
-)
+## ⚙️ Tham số
+
+### Fine-tune Parameters
+- `--data`: Đường dẫn file dữ liệu JSON/JSONL
+- `--output_dir`: Thư mục lưu model (default: `./model_output`)
+- `--epochs`: Số epoch train (default: 3)
+- `--train_bs`: Batch size train (default: 8)
+- `--eval_bs`: Batch size eval (default: 8)
+- `--lr`: Learning rate (default: 2e-5)
+- `--max_length`: Max sequence length (default: 256)
+
+### Predict Parameters
+- `--model_path`: Đường dẫn đến model đã train
+- `--texts`: Các text cần predict
+- `--file`: File chứa texts (mỗi dòng một text)
+- `--with_confidence`: Hiển thị confidence scores
+
+## 🔧 Cấu hình GPU
+
+### Tự động detect GPU:
+```bash
+# Model sẽ tự động sử dụng GPU nếu có
+python finetune_xlm_roberta.py --data data/dantri.jsonl
+```
+
+### Chỉ định GPU cụ thể:
+```bash
+# Sử dụng GPU 0
+python finetune_xlm_roberta.py --data data/dantri.jsonl --gpu_device cuda:0
+
+# Sử dụng CPU
+python finetune_xlm_roberta.py --data data/dantri.jsonl --gpu_device cpu
 ```
 
 ## 📈 Kết quả
 
-Script sẽ:
-1. **Phân tích dữ liệu**: Hiển thị thống kê về categories và phân bố
-2. **Chia dữ liệu**: Train (70%), Validation (10%), Test (20%)
-3. **Fine-tune model**: Training với XLM-RoBERTa
-4. **Đánh giá**: Accuracy và classification report
-5. **Lưu model**: Tại thư mục `./model_output`
+### Ví dụ Predictions
+```
+Text: "Bão số 3 đổ bộ vào miền Trung"
+Prediction: "Thời tiết"
 
-## 🎯 Các Categories được phát hiện
+Text: "Giá vàng hôm nay tăng mạnh"
+Prediction: "Kinh tế"
 
-Từ dữ liệu `data_demo2.json`, các categories bao gồm:
-- Thời sự
-- Thể thao  
-- Pháp luật
-- Thế giới
-- Xe
-- Sức khỏe
-- Giáo dục
-- Giải trí
-- Và nhiều categories khác...
+Text: "Công nghệ AI phát triển nhanh chóng"
+Prediction: "Công nghệ"
+```
 
-## 🔍 Troubleshooting
+## 🐛 Troubleshooting
 
-### Lỗi thường gặp:
+### Lỗi GPU không tìm thấy:
+```bash
+# Kiểm tra GPU
+nvidia-smi
 
-1. **Out of Memory (OOM)**:
-   - Giảm `max_length` xuống 128 hoặc 256
-   - Giảm `per_device_train_batch_size` xuống 4 hoặc 2
-   - Sử dụng gradient accumulation
+# Chạy với CPU
+python finetune_xlm_roberta.py --gpu_device cpu
+```
 
-2. **CUDA not available**:
-   - Cài đặt PyTorch với CUDA: `pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118`
+### Lỗi NCCL:
+```bash
+# Sử dụng script với environment variables
+./run_finetune_fixed.sh
+```
 
-3. **Dữ liệu không đúng format**:
-   - Kiểm tra cấu trúc JSON với `python quick_test.py`
+### Lỗi Memory:
+```bash
+# Giảm batch size
+python finetune_xlm_roberta.py --train_bs 4 --eval_bs 4
+```
 
-## 📝 Ghi chú
+## 📝 Logs
 
-- Model XLM-RoBERTa hỗ trợ đa ngôn ngữ, phù hợp cho tiếng Việt
-- Dữ liệu training cần cân bằng giữa các categories để tránh bias
-- Có thể sử dụng data augmentation để tăng số lượng mẫu training
-- Model được lưu tại `./model_output/` sau khi training xong
+### Wandb Logging
+- Model sử dụng wandb offline mode
+- Logs được lưu tại `wandb/offline-run-*`
+- Sync logs: `wandb sync wandb/offline-run-*`
+
+### Training Logs
+- Model checkpoints: `model_output/checkpoint-*`
+- Best model: `model_output/`
+- Training logs: Console output
 
 ## 🤝 Đóng góp
 
-Nếu bạn muốn cải thiện dự án này, hãy:
-1. Fork repository
+1. Fork project
 2. Tạo feature branch
 3. Commit changes
 4. Push to branch
@@ -216,4 +197,13 @@ Nếu bạn muốn cải thiện dự án này, hãy:
 
 ## 📄 License
 
-Dự án này được phát hành dưới MIT License. 
+MIT License
+
+## 📞 Liên hệ
+
+- Email: [your-email@example.com]
+- GitHub: [your-github-username]
+
+---
+
+**Lưu ý**: Model được train trên dữ liệu tiếng Việt và có thể cần fine-tune thêm cho domain cụ thể. 
