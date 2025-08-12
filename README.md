@@ -14,15 +14,17 @@ Project này fine-tune model XLM-RoBERTa để phân loại văn bản tiếng V
 
 ```
 FineTune xlmr-roBerta/
-├── finetune_xlm_roberta.py      # Script chính để fine-tune
-├── predict.py                   # Script để predict với model đã train
+├── finetune_xlm_roberta.py      # Script chính để fine-tune (JSON/JSONL)
+├── finetune_xlm_roberta_txt.py  # Script fine-tune với dữ liệu TXT
+├── predict.py                   # Script predict với model JSON/JSONL
+├── predict_txt.py              # Script predict với model TXT
 ├── test_texts.txt              # File test texts để predict
-├── run_finetune_fixed.sh       # Script chạy fine-tune với env vars
-├── run_finetune_docker.sh      # Script chạy fine-tune với Docker
-├── run_finetune_sudo.sh        # Script chạy fine-tune với sudo
+├── input_texts.txt             # File input texts để predict
 ├── data/
-│   └── dantri.jsonl            # Dữ liệu training (JSONL format)
-├── model_output/               # Thư mục lưu model đã train
+│   ├── dantri.jsonl            # Dữ liệu training (JSONL format)
+│   └── sample_data.txt         # Dữ liệu training (TXT format)
+├── model_output/               # Thư mục lưu model JSON/JSONL
+├── model_output_txt/           # Thư mục lưu model TXT
 ├── requirements.txt            # Dependencies
 └── README.md                   # File này
 ```
@@ -44,6 +46,16 @@ FineTune xlmr-roBerta/
 {"title": "Giá vàng tăng", "summary": "Thị trường sôi động", "category": "Kinh tế"}
 ```
 
+### TXT Format
+Format: `text\tlabel` hoặc `text|label` hoặc `text,label`
+
+### Ví dụ TXT:
+```
+Bão số 3 đổ bộ vào miền Trung gây thiệt hại nặng nề	Thời tiết
+Giá vàng hôm nay tăng mạnh lên mức cao nhất trong tháng	Kinh tế
+Công nghệ AI phát triển nhanh chóng trong năm 2024	Công nghệ
+```
+
 ## 🛠️ Cài đặt
 
 ### 1. Cài đặt dependencies
@@ -52,11 +64,14 @@ pip install -r requirements.txt
 ```
 
 ### 2. Chuẩn bị dữ liệu
-Đặt file dữ liệu JSON/JSONL vào thư mục `data/`
+Đặt file dữ liệu JSON/JSONL hoặc TXT vào thư mục `data/`
+
+### 3. Chuẩn bị file input cho predict (tùy chọn)
+Tạo file text chứa các câu cần predict (mỗi dòng một câu) như `input_texts.txt`
 
 ## 🚀 Sử dụng
 
-### 1. Fine-tune Model
+### 1. Fine-tune Model với JSON/JSONL
 
 #### Chạy trực tiếp:
 ```bash
@@ -69,46 +84,111 @@ python finetune_xlm_roberta.py \
   --lr 2e-5
 ```
 
-#### Chạy với script (khuyến nghị):
+#### Chạy với environment variables (khuyến nghị):
 ```bash
-chmod +x run_finetune_fixed.sh
-./run_finetune_fixed.sh
+# Set environment variables để tránh lỗi
+export TOKENIZERS_PARALLELISM=false
+export NCCL_DEBUG=INFO
+export CUDA_LAUNCH_BLOCKING=1
+
+# Chạy fine-tune
+python finetune_xlm_roberta.py \
+  --data data/dantri.jsonl \
+  --output_dir model_output \
+  --epochs 3 \
+  --train_bs 4 \
+  --eval_bs 4 \
+  --lr 2e-5
 ```
 
-#### Chạy với Docker:
+### 2. Fine-tune Model với TXT
+
+#### Chạy trực tiếp:
 ```bash
-chmod +x run_finetune_docker.sh
-./run_finetune_docker.sh
+python finetune_xlm_roberta_txt.py \
+  --data data/sample_data.txt \
+  --delimiter "\t" \
+  --output_dir model_output_txt \
+  --epochs 3 \
+  --train_bs 8 \
+  --eval_bs 8 \
+  --lr 2e-5
 ```
 
-### 2. Predict với Model đã Train
+#### Chạy với environment variables:
+```bash
+# Set environment variables để tránh lỗi
+export TOKENIZERS_PARALLELISM=false
+export NCCL_DEBUG=INFO
+export CUDA_LAUNCH_BLOCKING=1
 
-#### Predict với texts mặc định:
+# Chạy fine-tune với TXT
+python finetune_xlm_roberta_txt.py \
+  --data data/sample_data.txt \
+  --delimiter "\t" \
+  --output_dir model_output_txt \
+  --epochs 3 \
+  --train_bs 4 \
+  --eval_bs 4 \
+  --lr 2e-5
+```
+
+### 3. Predict với Model đã Train
+
+#### Predict với model JSON/JSONL:
 ```bash
 python predict.py --model_path ./model_output
 ```
 
+#### Predict với model TXT:
+```bash
+python predict_txt.py --model_path ./model_output_txt
+```
+
 #### Predict với texts cụ thể:
 ```bash
+# JSON/JSONL model
 python predict.py --model_path ./model_output \
+  --texts "Bão số 3 đổ bộ vào miền Trung" "Giá vàng hôm nay tăng mạnh"
+
+# TXT model
+python predict_txt.py --model_path ./model_output_txt \
   --texts "Bão số 3 đổ bộ vào miền Trung" "Giá vàng hôm nay tăng mạnh"
 ```
 
 #### Predict với file texts:
 ```bash
-python predict.py --model_path ./model_output --file test_texts.txt
+# JSON/JSONL model
+python predict.py --model_path ./model_output --file input_texts.txt
+
+# TXT model
+python predict_txt.py --model_path ./model_output_txt --file input_texts.txt
 ```
 
 #### Predict với confidence scores:
 ```bash
-python predict.py --model_path ./model_output --file test_texts.txt --with_confidence
+# JSON/JSONL model
+python predict.py --model_path ./model_output --file input_texts.txt --with_confidence
+
+# TXT model
+python predict_txt.py --model_path ./model_output_txt --file input_texts.txt --with_confidence
 ```
 
 ## ⚙️ Tham số
 
-### Fine-tune Parameters
+### Fine-tune Parameters (JSON/JSONL)
 - `--data`: Đường dẫn file dữ liệu JSON/JSONL
 - `--output_dir`: Thư mục lưu model (default: `./model_output`)
+- `--epochs`: Số epoch train (default: 3)
+- `--train_bs`: Batch size train (default: 8)
+- `--eval_bs`: Batch size eval (default: 8)
+- `--lr`: Learning rate (default: 2e-5)
+- `--max_length`: Max sequence length (default: 256)
+
+### Fine-tune Parameters (TXT)
+- `--data`: Đường dẫn file dữ liệu TXT
+- `--delimiter`: Delimiter giữa text và label (default: `\t`)
+- `--output_dir`: Thư mục lưu model (default: `./model_output_txt`)
 - `--epochs`: Số epoch train (default: 3)
 - `--train_bs`: Batch size train (default: 8)
 - `--eval_bs`: Batch size eval (default: 8)
@@ -165,8 +245,11 @@ python finetune_xlm_roberta.py --gpu_device cpu
 
 ### Lỗi NCCL:
 ```bash
-# Sử dụng script với environment variables
-./run_finetune_fixed.sh
+# Sử dụng environment variables
+export TOKENIZERS_PARALLELISM=false
+export NCCL_DEBUG=INFO
+export CUDA_LAUNCH_BLOCKING=1
+python finetune_xlm_roberta.py --data data/dantri.jsonl
 ```
 
 ### Lỗi Memory:
