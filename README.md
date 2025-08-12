@@ -201,8 +201,8 @@ MIT License
 
 ## 📞 Liên hệ
 
-- Email: [your-email@example.com]
-- GitHub: [your-github-username]
+- Email: [ntmpwork@example.com]
+- GitHub: [ntmp1910]
 
 ---
 
