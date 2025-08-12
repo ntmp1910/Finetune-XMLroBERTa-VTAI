@@ -14,7 +14,10 @@ import warnings
 warnings.filterwarnings('ignore')
 import argparse
 import os
+import wandb 
+wandb.init(mode = "offline")
 
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
 # ====== THÊM: hỗ trợ gọi API OpenAI-compatible ======
 import openai
 try:
@@ -24,7 +27,7 @@ except Exception:
 # ====================================================
 
 class VietnameseTextClassifier:
-    def __init__(self, model_name="xlm-roberta-base", max_length=512,
+    def __init__(self, model_name="/home/dungdx4/BERT/xlm-roberta-base-language-detection", max_length=512,
                  api_base_url: str = None, api_key: str = None, api_model_name: str = None):
         self.model_name = model_name
         self.max_length = max_length
@@ -96,18 +99,25 @@ class VietnameseTextClassifier:
 
     def setup_model(self):
         print(f"Đang load tokenizer và model: {self.model_name}")
-        self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
+        
+        # Sử dụng cách gọi GPU chính xác
+        self.tokenizer = AutoTokenizer.from_pretrained("/home/dungdx4/BERT/xlm-roberta-base-language-detection")
         if self.tokenizer.pad_token is None:
             self.tokenizer.pad_token = self.tokenizer.eos_token
+        
         num_labels = len(self.label2id)
         self.model = AutoModelForSequenceClassification.from_pretrained(
-            self.model_name, 
+            "/home/dungdx4/BERT/xlm-roberta-base-language-detection",
             num_labels=num_labels, 
             id2label=self.id2label, 
             label2id=self.label2id,
-            ignore_mismatched_sizes=True  # Thêm tham số này để xử lý khi số labels khác nhau
+            ignore_mismatched_sizes=True
         )
         print(f"Model đã được khởi tạo với {num_labels} labels")
+        
+        # Move model to GPU theo cách chính xác
+        self.model.to(device="cuda:0")
+        print(f"[Info] Model moved to GPU: cuda:1")
 
     def compute_metrics(self, eval_pred):
         predictions, labels = eval_pred
@@ -134,7 +144,7 @@ class VietnameseTextClassifier:
         warmup_steps: int = 500,
         weight_decay: float = 0.01,
         logging_steps: int = 100,
-        dataloader_num_workers: int = 4,
+        dataloader_num_workers: int = 1,
     ):
         tokenized_train = self.tokenize_data(train_dataset)
         tokenized_val = self.tokenize_data(val_dataset)
@@ -154,6 +164,10 @@ class VietnameseTextClassifier:
             save_total_limit=2,
             warmup_steps=warmup_steps,
             dataloader_num_workers=dataloader_num_workers,
+            report_to=None,  # Tắt tensorboard để tránh lỗi protobuf
+            ddp_find_unused_parameters=False,
+            dataloader_pin_memory=False,
+            
         )
         trainer = Trainer(
             model=self.model, args=training_args,
@@ -178,6 +192,10 @@ class VietnameseTextClassifier:
 
     def predict(self, texts):
         inputs = self.tokenizer(texts, truncation=True, padding=True, max_length=self.max_length, return_tensors='pt')
+        
+        devices = next(self.model.parameters()).device
+        inputs = {k: v.to(device) for k, v in inputs.items()}
+        
         with torch.no_grad():
             outputs = self.model(**inputs)
             predictions = torch.argmax(outputs.logits, dim=-1)
@@ -223,28 +241,25 @@ def main():
     parser.add_argument("--train_bs", type=int, default=8, help="Batch size train mỗi GPU")
     parser.add_argument("--eval_bs", type=int, default=8, help="Batch size eval mỗi GPU")
     parser.add_argument("--lr", type=float, default=2e-5, help="Learning rate")
-    parser.add_argument("--cuda_visible_devices", type=str, default=None, help="Chỉ định GPU, ví dụ: '0' hoặc '1' hoặc '0,1'")
+
     args = parser.parse_args()
 
-    # (Optional) Chỉ định GPU qua tham số CLI thay vì export biến môi trường bên ngoài
-    if args.cuda_visible_devices:
-        os.environ["CUDA_VISIBLE_DEVICES"] = args.cuda_visible_devices
-        print(f"[Info] CUDA_VISIBLE_DEVICES set to: {os.environ['CUDA_VISIBLE_DEVICES']}")
-    # In thông tin GPU hiện có
+    # In thông tin GPU
     try:
         print(f"[Info] CUDA available: {torch.cuda.is_available()}")
         if torch.cuda.is_available():
-            print(f"[Info] Num GPUs visible: {torch.cuda.device_count()}")
+            print(f"[Info] Total GPUs on system: {torch.cuda.device_count()}")
             for i in range(torch.cuda.device_count()):
                 print(f"  - GPU {i}: {torch.cuda.get_device_name(i)}")
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"[Error] GPU check failed: {e}")
 
     # 1) Load data để xác định label mapping trước
     classifier = VietnameseTextClassifier(
         model_name=args.base_model,
         max_length=args.max_length,
     )
+
     df = classifier.load_data(args.data)
 
     # 2) Nếu resume_from được cung cấp, dùng đường dẫn đó làm model nguồn
